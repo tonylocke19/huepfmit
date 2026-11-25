@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hüpfmit Mayen-Koblenz</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800;900&display=swap">
+<style>
+/* Layout: eine schmale App-Spalte; jede Fahrt ist ein Wegweiser mit Abfahrts-Countdown */
+:root{--bg:#eef1f2;--card:#fff;--fg:#172126;--mut:#56666e;--line:#d3dcdf;--sign:#ffd100;--on-sign:#172126;--go:#146c4a;--warn:#a3341f;--btn:#172126;--on-btn:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10171a;--card:#1a2429;--fg:#eaf0f2;--mut:#9fb0b8;--line:#304047;--go:#62cfa0;--warn:#ff9a85;--btn:#eaf0f2;--on-btn:#10171a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10171a;--card:#1a2429;--fg:#eaf0f2;--mut:#9fb0b8;--line:#304047;--go:#62cfa0;--warn:#ff9a85;--btn:#eaf0f2;--on-btn:#10171a;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.45 Overpass,system-ui,sans-serif}
+.wrap{max-width:600px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:30px;font-weight:900;margin:0;letter-spacing:-.5px}
+h1 span{background:var(--sign);color:var(--on-sign);padding:0 8px;border-radius:5px}
+h2{font-size:18px;margin:22px 0 8px}
+p{margin:6px 0}.mut{color:var(--mut);font-size:14px}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:14px 0;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:6px 0;z-index:5}
+button,select,input{font:inherit;color:inherit;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:9px 11px;min-width:0}
+button{cursor:pointer;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid #2b7fff;outline-offset:1px}
+nav button{padding:9px 2px;font-size:14px}
+button[aria-pressed="true"]{background:var(--sign);color:var(--on-sign);border-color:var(--sign)}
+.primary{background:var(--btn);color:var(--on-btn);border-color:var(--btn)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mut);min-width:0}
+label>*{color:var(--fg);font-size:16px;width:100%}
+.full{grid-column:1/-1}
+.chips,.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row{justify-content:space-between;gap:10px;margin-top:10px}
+.sign{background:var(--sign);color:var(--on-sign);border:2px solid var(--on-sign);outline:2px solid var(--sign);border-radius:6px;padding:6px 10px;margin:2px;font-weight:800;line-height:1.25}
+.sign small{display:block;font-weight:600;font-size:14px;border-top:2px solid var(--on-sign);margin-top:4px;padding-top:3px}
+.when{display:flex;justify-content:space-between;gap:8px;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+.when b{font-size:20px;font-weight:900}
+.ok{color:var(--go);font-weight:800}.bad{color:var(--warn);font-weight:800}
+.note{border:1px dashed var(--mut);border-radius:8px;padding:8px 12px;font-size:14px}
+.empty{text-align:center;border:1px dashed var(--line);border-radius:10px;padding:18px}
+#msg:not(:empty){background:var(--btn);color:var(--on-btn);border-radius:8px;padding:10px 12px;position:fixed;left:16px;right:16px;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-width:560px;margin:auto;z-index:9}
+details{margin-top:24px;font-size:14px}summary{cursor:pointer;font-weight:600}
+body{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1><span>Hüpf</span>mit</h1>
+<p class="mut">Mitfahrten und Sammeltaxis für die nächsten 24 Stunden rund um Andernach, Mayen und Koblenz.</p>
+<div class="note"><div id="modeText"></div><div class="chips" style="margin-top:6px" id="modes"></div></div>
+<nav id="nav"></nav>
+<main id="view"></main>
+<details><summary>Preise, Regeln und Grenzen dieses Prototyps</summary>
+<p>Private Mitfahrten: Die App begrenzt das Entgelt aller Mitfahrenden zusammen auf 0,30 € je km (§ 1 Abs. 2 PBefG in Verbindung mit § 5 Abs. 2 BRKG). Das ist keine Rechtsberatung.</p>
+<p>Kilometer sind grobe Schätzwerte. Der Taxipreis rechnet mit 3,80 € Grundpreis und 2,20 € je km. Er enthält keine Wartezeit oder Zuschläge und kann veraltet sein. Es gilt der Taxameter.</p>
+<p>Die App bestellt kein Taxi, verarbeitet keine Zahlungen und prüft keine Identitäten. Einträge im geteilten Modus sind für andere Nutzer sichtbar und technisch nicht gegen Änderungen durch andere Schreibberechtigte geschützt. Bitte keine Telefonnummern oder Privatadressen eintragen.</p>
+</details>
+</div>
+<div id="msg" role="status"></div>
+<script>
+const KM={"Andernach|Koblenz":19,"Andernach|Mendig":17,"Andernach|Mayen":23,"Andernach|Neuwied":9,"Andernach|Weißenthurm":6,"Andernach|Plaidt":9,"Koblenz|Mendig":28,"Koblenz|Mayen":32,"Koblenz|Neuwied":15,"Koblenz|Weißenthurm":14,"Koblenz|Plaidt":20,"Mayen|Mendig":8,"Mayen|Neuwied":30,"Mayen|Weißenthurm":23,"Mayen|Plaidt":16,"Mendig|Neuwied":25,"Mendig|Weißenthurm":18,"Mendig|Plaidt":10,"Neuwied|Weißenthurm":5,"Neuwied|Plaidt":17,"Plaidt|Weißenthurm":10};
+const ORTE=["Andernach","Koblenz","Mayen","Mendig","Neuwied","Plaidt","Weißenthurm"];
+const COLS=["rides","bookings","requests","taxis","taxiseats"];
+const km=(a,b)=>KM[[a,b].sort((x,y)=>x.localeCompare(y,'de')).join('|')]||0;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur=n=>Number(n).toFixed(2).replace('.',',')+' €';
+const maxPrice=(k,s)=>Math.floor(k*0.3/s*10+1e-6)/10;
+const taxiTotal=k=>3.8+2.2*k;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+const empty=()=>Object.fromEntries(COLS.map(c=>[c,{}]));
+function demoData(){const d=empty(),n=Date.now(),m=x=>n+x*60000;
+ d.rides.a={user:'Lena',from:'Andernach',to:'Koblenz',dep:m(18),seats:3,price:1.5,meet:'Bahnhof, Vorplatz',note:'Blauer Kleinwagen'};
+ d.rides.b={user:'Murat',from:'Mendig',to:'Andernach',dep:m(42),seats:2,price:2,meet:'Bahnhof',note:''};
+ d.rides.c={user:'Sabine',from:'Andernach',to:'Koblenz',dep:m(95),seats:1,price:3,meet:'Marktplatz',note:'Kein Platz für große Koffer'};
+ d.requests.r={user:'Tom',from:'Mayen',to:'Andernach',dep:m(30)};
+ d.taxis.t={user:'Jana',from:'Koblenz',to:'Mendig',dep:m(150),max:4,meet:'Hauptbahnhof, Taxistand',ordered:false};
+ d.taxiseats.t_Jana={taxi:'t',user:'Jana'};d.taxiseats.t_Ali={taxi:'t',user:'Ali'};return d}
+
+let demo=demoData(),live=empty(),mode='demo',db=null,userApi=null,me=null,names={},canWrite=true,liveError='';
+let tab='find',F={from:'Andernach',to:'Koblenz',off:'15',time:'',seats:'3',price:'1.5',meet:'',note:'',max:'4'};
+const D=()=>mode==='demo'?demo:live;
+const my=()=>mode==='demo'?'Du':me;
+const who=id=>mode==='demo'?id:(id===me?'Du':(names[id]||'Nutzer'));
+const list=c=>Object.entries(D()[c]).map(([id,v])=>({id,...v}));
+const fresh=x=>x.dep>Date.now()-15*60000&&x.dep<Date.now()+24.5*3600000;
+const soon=(a,b)=>a.dep-b.dep;
+const booked=r=>list('bookings').filter(b=>b.ride===r&&b.status==='ok').length;
+const riders=t=>list('taxiseats').filter(s=>s.taxi===t);
+
+function toast(t){$('#msg').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#msg').textContent='',4000)}
+async function write(col,id,val,done){
+ try{
+  if(mode==='demo'){val?demo[col][id]=val:delete demo[col][id]}
+  else{if(!db||!me||!canWrite)throw 0;const ref=db.doc(col+'/'+id);val?await ref.set(val):await ref.delete()}
+  if(done)toast(done);render();return true
+ }catch(e){toast('Nicht gespeichert. Prüfe, ob du Schreibzugriff hast, oder nutze die Beispieldaten.');return false}
+}
+
+function depTime(){
+ if(F.off!=='x')return Date.now()+Number(F.off)*60000;
+ if(!F.time)return null;
+ const [h,m]=F.time.split(':').map(Number),d=new Date();d.setHours(h,m,0,0);
+ if(d<Date.now()-60000)d.setDate(d.getDate()+1);return d.getTime()
+}
+function when(t){const m=Math.round((t-Date.now())/60000),d=new Date(t),
+ clock=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr'+(d.toDateString()!==new Date().toDateString()?' (morgen)':'');
+ return `<div class="when"><b>${m<-0?'seit '+(-m)+' Min.':m<1?'jetzt':m<60?'in '+m+' Min.':'in '+Math.floor(m/60)+' Std. '+m%60+' Min.'}</b><span>${clock}</span></div>`}
+const sign=x=>`<div class="sign">${esc(x.to)}<small>ab ${esc(x.from)} · ca. ${km(x.from,x.to)} km</small></div>`;
+const opts=(a,v)=>a.map(o=>`<option ${String(o)===String(v)?'selected':''}>${o}</option>`).join('');
+const btn=(act,label,id='',cls='',off=false)=>`<button class="${cls}" data-act="${act}" data-id="${esc(id)}" ${off?'disabled':''}>${label}</button>`;
+const nothing=t=>`<div class="empty mut">${t}</div>`;
+
+function routeForm(){return `<div class="grid">
+<label>Von<select id="from">${opts(ORTE,F.from)}</select></label>
+<label>Nach<select id="to">${opts(ORTE,F.to)}</select></label>
+<div class="full chips">${btn('swap','⇄ Richtung tauschen')}</div></div>`}
+function timeForm(){return `<p class="mut">Abfahrt</p><div class="chips">${[['0','Jetzt'],['15','15 Min.'],['30','30 Min.'],['60','1 Std.'],['x','Uhrzeit']].map(([v,l])=>`<button data-act="off" data-id="${v}" aria-pressed="${F.off===v}">${l}</button>`).join('')}${F.off==='x'?`<input type="time" id="time" aria-label="Uhrzeit" value="${esc(F.time)}">`:''}</div>`}
+
+function rideCard(r){
+ const free=r.seats-booked(r.id),mine=r.user===my(),b=list('bookings').find(x=>x.ride===r.id&&x.user===my());
+ let action;
+ if(mine)action=btn('delRide','Fahrt absagen',r.id);
+ else if(b)action=`<span class="${b.status==='ok'?'ok':b.status==='no'?'bad':''}">${{ok:'Platz bestätigt',no:'Abgelehnt',ask:'Angefragt'}[b.status]||''}</span>${btn('cancel','Zurückziehen',b.id)}`;
+ else action=btn('book',free>0?'Platz anfragen':'Ausgebucht',r.id,'primary',free<1);
+ let asks='';
+ if(mine)asks=list('bookings').filter(x=>x.ride===r.id).map(x=>`<div class="row"><span>${esc(who(x.user))}: ${x.status==='ok'?'<span class="ok">bestätigt</span>':x.status==='no'?'abgelehnt':'möchte mit'}</span>${x.status==='ask'?`<span class="chips">${btn('accept','Bestätigen',x.id,'primary',free<1)}${btn('reject','Ablehnen',x.id)}</span>`:''}</div>`).join('');
+ return `<article class="box">${sign(r)}${when(r.dep)}<p>${mine?'Du fährst':esc(who(r.user))+' fährt'} · Treffpunkt: ${esc(r.meet)}</p>${r.note?`<p class="mut">${esc(r.note)}</p>`:''}
+ <div class="row"><span><b>${Number(r.price)?eur(r.price):'Kostenlos'}</b> · ${Math.max(free,0)} von ${Number(r.seats)} frei</span><span class="chips">${action}</span></div>${asks}</article>`}
+
+function taxiCard(t){
+ const m=riders(t.id),joined=m.some(s=>s.user===my()),mine=t.user===my(),total=taxiTotal(km(t.from,t.to));
+ return `<article class="box">${sign(t)}${when(t.dep)}<p>Treffpunkt: ${esc(t.meet)}</p>
+ <p>${m.length} von ${Number(t.max)} dabei: ${m.map(s=>esc(who(s.user))).join(', ')}</p>
+ <p><b>ca. ${eur(total/Math.max(m.length,1))} pro Person</b> <span class="mut">bei ${eur(total)} gesamt; voll besetzt ${eur(total/t.max)}</span></p>
+ <p class="${t.ordered?'ok':'mut'}">${t.ordered?'Taxi ist laut Organisator bestellt':'Taxi noch nicht bestellt'} · Organisiert von ${mine?'dir':esc(who(t.user))}</p>
+ <div class="row"><span></span><span class="chips">${mine?btn('order',t.ordered?'Doch nicht bestellt':'Als bestellt markieren',t.id,'primary')+btn('delTaxi','Gruppe auflösen',t.id):joined?btn('leave','Aussteigen',t.id):btn('join',m.length<t.max?'Einsteigen':'Voll',t.id,'primary',m.length>=t.max)}</span></div></article>`}
+
+const reqCard=q=>`<article class="box">${sign(q)}${when(q.dep)}<div class="row"><span>${q.user===my()?'Du suchst':esc(who(q.user))+' sucht'} eine Mitfahrt</span>${q.user===my()?btn('delReq','Gesuch löschen',q.id):btn('take','Mitnehmen anbieten',q.id,'primary')}</div></article>`;
+
+const views={
+ find(){const hits=list('rides').filter(r=>fresh(r)&&r.from===F.from&&r.to===F.to).sort(soon);
+  return `<div class="box">${routeForm()}</div><h2>Nächste Fahrten</h2>${hits.map(rideCard).join('')||nothing(`Gerade fährt niemand von ${F.from} nach ${F.to}. Gib ein Gesuch auf oder starte ein Sammeltaxi.`)}
+  <div class="box"><b>Nichts Passendes?</b>${timeForm()}<div class="row">${btn('request','Gesuch aufgeben')}${btn('goTaxi','Zum Sammeltaxi')}</div></div>`},
+ offer(){const k=km(F.from,F.to),cap=k?maxPrice(k,+F.seats):0,price=Math.min(+F.price||0,cap),
+  steps=[];for(let p=0;p<=cap+1e-6;p+=.5)steps.push(p);if(cap-steps[steps.length-1]>.01)steps.push(cap);
+  const reqs=list('requests').filter(fresh).sort(soon);
+  return `<div class="box">${routeForm()}${timeForm()}<div class="grid" style="margin-top:10px">
+  <label>Freie Plätze<select id="seats">${opts([1,2,3,4],F.seats)}</select></label>
+  <label>Preis pro Platz<select id="price">${steps.map(p=>`<option value="${p.toFixed(2)}" ${p<=price+1e-6?'selected':''}>${p?eur(p):'Kostenlos'}</option>`).join('')}</select></label>
+  <label class="full">Treffpunkt<input id="meet" maxlength="60" placeholder="z. B. Bahnhof, Vorplatz" value="${esc(F.meet)}"></label>
+  <label class="full">Hinweis (freiwillig)<input id="note" maxlength="80" placeholder="z. B. roter Kombi" value="${esc(F.note)}"></label></div>
+  <div class="row"><span class="mut">Höchstens ${eur(cap)} pro Platz auf dieser Strecke</span>${btn('publish','Fahrt anbieten','','primary')}</div></div>
+  <h2>Wer sucht gerade?</h2>${reqs.map(reqCard).join('')||nothing('Keine offenen Gesuche.')}`},
+ taxi(){const t=list('taxis').filter(fresh).sort(soon),k=km(F.from,F.to);
+  return `<h2>Offene Sammeltaxis</h2>${t.map(taxiCard).join('')||nothing('Noch keine Gruppe. Starte unten die erste.')}
+  <h2>Neue Gruppe starten</h2><div class="box">${routeForm()}${timeForm()}<div class="grid" style="margin-top:10px">
+  <label>Plätze inklusive dir<select id="max">${opts([2,3,4,5,6,7,8],F.max)}</select></label>
+  <label>Treffpunkt<input id="meet" maxlength="60" placeholder="z. B. Taxistand" value="${esc(F.meet)}"></label></div>
+  <p class="mut">${k?`Taxi ca. ${eur(taxiTotal(k))}, voll besetzt ca. ${eur(taxiTotal(k)/F.max)} pro Person.`:''}${F.max>4?' Ab 5 Personen braucht ihr ein Großraumtaxi, eventuell mit Zuschlag.':''}</p>
+  <div class="row"><span></span>${btn('newTaxi','Gruppe starten','','primary')}</div></div>`},
+ mine(){const u=my(),r=list('rides').filter(x=>fresh(x)&&(x.user===u||list('bookings').some(b=>b.ride===x.id&&b.user===u))).sort(soon),
+  t=list('taxis').filter(x=>fresh(x)&&riders(x.id).some(s=>s.user===u)),q=list('requests').filter(x=>fresh(x)&&x.user===u);
+  return `<h2>Meine Fahrten</h2>${r.map(rideCard).join('')+t.map(taxiCard).join('')+q.map(reqCard).join('')||nothing('Du hast noch nichts geplant. Such eine Fahrt oder biete selbst eine an.')}`}
+};
+
+function render(){
+ const f=document.activeElement?.id;
+ $('#modeText').textContent=mode==='demo'?'Beispieldaten: alle Namen und Fahrten sind erfunden. Deine Eingaben bleiben nur bis zum Neuladen erhalten.':liveError||(!db||!me?'Der geteilte Modus ist in dieser Ansicht nicht verfügbar.':!canWrite?'Geteilter Modus: Du kannst nur lesen.':'Geteilter Modus: Einträge sehen alle, die Zugriff auf diese App haben.');
+ $('#modes').innerHTML=[['demo','Beispieldaten'],['live','Geteilter Modus']].map(([v,l])=>`<button data-act="mode" data-id="${v}" aria-pressed="${mode===v}">${l}</button>`).join('');
+ $('#nav').innerHTML=[['find','Suchen'],['offer','Anbieten'],['taxi','Sammeltaxi'],['mine','Meine']].map(([v,l])=>`<button data-act="tab" data-id="${v}" aria-pressed="${tab===v}">${l}</button>`).join('');
+ $('#view').innerHTML=views[tab]();
+ if(f&&document.getElementById(f))document.getElementById(f).focus();
+}
+
+function validRoute(){if(F.from===F.to){toast('Start und Ziel müssen verschieden sein.');return false}return true}
+function validTrip(){if(!validRoute())return null;const t=depTime();if(!t){toast('Wähle eine Uhrzeit.');return null}return t}
+const act={
+ mode:v=>{mode=v;render()},tab:v=>{tab=v;F.meet='';render();scrollTo(0,0)},off:v=>{F.off=v;render()},
+ swap:()=>{[F.from,F.to]=[F.to,F.from];render()},goTaxi:()=>act.tab('taxi'),
+ book:r=>write('bookings',r+'_'+my(),{ride:r,user:my(),status:'ask'},'Angefragt. Warte auf die Bestätigung.'),
+ cancel:id=>write('bookings',id,null,'Anfrage zurückgezogen'),
+ accept:id=>{const b=D().bookings[id],r=b&&D().rides[b.ride];if(r&&booked(b.ride)<r.seats)write('bookings',id,{...b,status:'ok'},'Platz bestätigt')},
+ reject:id=>write('bookings',id,{...D().bookings[id],status:'no'},'Abgelehnt'),
+ delRide:id=>write('rides',id,null,'Fahrt abgesagt'),delReq:id=>write('requests',id,null,'Gesuch gelöscht'),
+ request:()=>{const dep=validTrip();if(dep)write('requests',uid(),{user:my(),from:F.from,to:F.to,dep},'Gesuch ist online. Du findest es unter „Meine“.')},
+ take:id=>{const q=D().requests[id];Object.assign(F,{from:q.from,to:q.to,off:'x',time:new Date(Math.max(q.dep,Date.now()+60000)).toTimeString().slice(0,5)});render();scrollTo(0,0);toast('Daten übernommen. Ergänze den Treffpunkt und biete die Fahrt an.')},
+ publish:async()=>{const dep=validTrip();if(!dep)return;if(!F.meet.trim())return toast('Gib einen Treffpunkt an.');
+  const price=Math.min(+F.price||0,maxPrice(km(F.from,F.to),+F.seats));
+  if(await write('rides',uid(),{user:my(),from:F.from,to:F.to,dep,seats:+F.seats,price,meet:F.meet.trim(),note:F.note.trim()},'Fahrt ist online')){F.meet=F.note='';tab='mine';render()}},
+ newTaxi:async()=>{const dep=validTrip();if(!dep)return;if(!F.meet.trim())return toast('Gib einen Treffpunkt an.');const id=uid(),u=my();
+  if(await write('taxis',id,{user:u,from:F.from,to:F.to,dep,max:+F.max,meet:F.meet.trim(),ordered:false})){if(await write('taxiseats',id+'_'+u,{taxi:id,user:u},'Gruppe gestartet')){F.meet='';render()}}},
+ join:t=>{if(riders(t).length<D().taxis[t].max)write('taxiseats',t+'_'+my(),{taxi:t,user:my()},'Du bist dabei')},
+ leave:t=>write('taxiseats',t+'_'+my(),null,'Du bist ausgestiegen'),
+ order:t=>write('taxis',t,{...D().taxis[t],ordered:!D().taxis[t].ordered}),
+ delTaxi:async t=>{for(const s of riders(t))await write('taxiseats',s.id,null);write('taxis',t,null,'Gruppe aufgelöst')}
+};
+let armed='';
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=b.dataset.id;
+ if(['delRide','delTaxi'].includes(a)&&armed!==a+id){armed=a+id;b.textContent='Wirklich? Nochmal tippen';return}
+ armed='';act[a](id)});
+document.addEventListener('input',e=>{if(e.target.id in F){F[e.target.id]=e.target.value;if(e.target.tagName==='SELECT')render()}});
+setInterval(()=>{if(!['INPUT','SELECT'].includes(document.activeElement?.tagName)&&!armed)render()},30000);
+render();
+
+(async()=>{
+ if(!window.claude?.use)return;
+ [db,userApi]=await Promise.all([claude.use('db'),claude.use('user')]);
+ if(!db||!userApi)return render();
+ me=await userApi.id();canWrite=(await userApi.can('data.write'))!==false;
+ for(const c of COLS)db.collection(c).onSnapshot(async s=>{
+  live[c]=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));
+  const ids=[...new Set(Object.values(live[c]).map(v=>v.user).filter(Boolean))];
+  if(ids.length){const p=await userApi.profiles(ids);ids.forEach(i=>names[i]=p[i]?.name||'')}
+  if(mode==='live'&&!['INPUT','SELECT'].includes(document.activeElement?.tagName))render()
+ },()=>{liveError='Die geteilten Daten sind gerade nicht erreichbar. Lade die Seite neu.';render()});
+ render();
+})();
+</script>
+</body>
+</html>
